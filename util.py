@@ -4,6 +4,7 @@ from itertools import chain
 import pprint
 import operator
 
+
 def reformat_to_dec(a):
     return '(' + ','.join(map(lambda x: str(int(x, 2)), a.split(','))) + ')'
 
@@ -26,6 +27,7 @@ def chk_not_overlap(s1, s2):
         if a not in l and b not in l:
             c.add(_)
     return s1 - c
+
 
 def adjust_boundary():
     var_id = None
@@ -85,5 +87,66 @@ def adjust_boundary():
             # break
 
 
+def chk_stat_in_exon(cur_pos, bounds):
+    # start  = 1
+    # middle = 0
+    # end    = -1
+    # extragenic region = 1
+    tmp = filter(lambda x: int(x[0]) >= int(cur_pos) >= int(x[1]), bounds)
+    if tmp != []:
+        start, end = tmp[0]
+        if start == cur_pos:
+            return 1
+        elif end == cur_pos:
+            return -1
+        else:
+            return 0
+    return 1
+
+
+def find_missing_exon():
+    ref_bound = []
+    var_bound = []
+    comm_bound = []
+    is_ref = True
+    chk = False
+    var_id = None
+    for line in read_file('test/NM_004643.3.as'):
+        if line.startswith("VAR"):
+            var_bound = []
+            comm_bound = []
+            var_id = line.split()[1]
+            # print var_id
+            is_ref = False
+            chk = True
+        elif line.startswith('EXON'):
+            _, __ = line.split()[4:6]
+            if is_ref:
+                ref_bound.append((_, __))
+            else:
+                var_bound.append((_, __))
+        elif line.startswith('COMM'):
+            _, __ = line.split()[2:4]
+            comm_bound.append((_, __))
+        elif line.startswith('//') and chk:
+            c = []
+            all_bound = sorted(set(chain(*ref_bound)) | set(chain(*var_bound)), reverse=True)
+            start = None
+            for bound in all_bound:
+                shift_1 = chk_stat_in_exon(bound, ref_bound)
+                shift_2 = chk_stat_in_exon(bound, var_bound)
+                if shift_1 == 0 or shift_2 == 0:
+                    c.append((start, bound))
+                    start = int(bound) + shift_1 + shift_2
+                else:
+                    if start is not None:
+                        c.append((start, bound))
+                        start = None
+                    else:
+                        start = bound
+            if len(c) != len(comm_bound):
+                print ">>", var_id
+
 if __name__ == '__main__':
-    adjust_boundary()
+    # adjust_boundary()
+    find_missing_exon()
