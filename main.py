@@ -1,10 +1,8 @@
 from itertools import tee, izip, izip_longest
-
-
-def read_file(f):
-    with open(f) as f_in:
-        for _ in f_in:
-            yield _.strip()
+from report import Stat
+from os import makedirs
+from os.path import isfile, join, exists
+import util
 
 
 def pairwise(iterable):
@@ -47,16 +45,16 @@ def extract_asti(seq1, seq2):
     seq2 = list(seq2)
     seq1.reverse()
     seq2.reverse()
-    stat1 = stat2 = True
+    status1 = status2 = True
     sub1 = []
     sub2 = []
     ASTIs = {}
     # After length of s1 and s2 became 1, the remaining is onyl 'A'
     # That means s1 and s2 were read overall
     while len(seq1) != 1 or len(seq2) != 1:
-        sub1, stat1 = update(seq1, sub1, stat1)
-        sub2, stat2 = update(seq2, sub2, stat2)
-        if stat1 and stat2:
+        sub1, status1 = update(seq1, sub1, status1)
+        sub2, status2 = update(seq2, sub2, status2)
+        if status1 and status2:
             if sub1 != sub2:
                 pattern = chk_asti(sub1, sub2)
                 if pattern is not None:
@@ -83,28 +81,40 @@ def generate_bit_array(V):
 
 
 def main():
-    V = {}
-    trans_id = None
-    for line in read_file('NM_002654.4.as'):
-        if line.startswith('VAR'):
-            trans_id = line.split()[1]
-            V[trans_id] = []
-        elif line.startswith('COMM'):
-            _ = line.split()
-            _ = map(lambda x : int(x), (_[2:8]))
-            V[trans_id].append(_)
+    input_dir = "./test"
+    output_dir = "./stat"
+    stat = Stat()
+    for f_path in util.read_dir(input_dir):
+        print f_path
+        V = {}
+        ref_id = None
+        trans_id = None
+        for line in util.read_file(join(input_dir, f_path)):
+            if line.startswith('VAR'):
+                trans_id = line.split()[1]
+                V[trans_id] = []
+            elif line.startswith('REF'):
+                ref_id = line.split()[1].split('.')[0]
+            elif line.startswith('COMM'):
+                _ = line.split()
+                _ = map(lambda x : int(x), (_[2:8]))
+                V[trans_id].append(_)
 
-    for trans_id in V:
-        print trans_id
-        print "---"
-        bt_r, bt_v = generate_bit_array(V[trans_id])
-        print bt_r
-        print bt_v
-        print "---"
-        for p in extract_asti(bt_r, bt_v):
-            print p
-        print ""
-        # break
+        if not exists(output_dir):
+            makedirs(output_dir)
+
+        with open(join(output_dir, f_path) + '.stat', 'w') as f_out:
+            for trans_id in V:
+                f_out.write("%s <-> %s\n" % (ref_id, trans_id.split('.')[0]))
+                bt_r, bt_v = generate_bit_array(V[trans_id])
+                for bit_pattern, n_bit_pattern in extract_asti(bt_r, bt_v).items():
+                    stat.add(bit_pattern, n_bit_pattern)
+                    dec_pattern = util.reformat_to_dec(bit_pattern)
+                    f_out.write("%s %s %d\n" % (bit_pattern, dec_pattern, n_bit_pattern))
+                f_out.write("//\n")
+                # break
+    with open('stat_report.log', 'w') as f_out:
+        f_out.write(stat.report())
 
 if __name__ == '__main__':
     main()
