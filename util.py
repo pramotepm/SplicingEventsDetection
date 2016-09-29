@@ -87,38 +87,67 @@ def adjust_boundary():
             # break
 
 
-def chk_stat_in_exon(cur_pos, bounds):
-    # start  = 1
+def chk_stat_in_exon(cur_pos, bounds, direction):
+    # start  = 1 or -1 if ascending
     # middle = 0
-    # end    = -1
-    # extragenic region = 1
-    tmp = filter(lambda x: int(x[0]) >= int(cur_pos) >= int(x[1]), bounds)
+    # end    = -1 or 1 if ascending
+    # extragenic region or intronic region = 1
+    if direction == 'asc':
+        compare_f = lambda x: int(x[0]) <= int(cur_pos) <= int(x[1])
+        shift_before_start = -1
+        shift_after_end = 1
+    elif direction == 'des':
+        compare_f = lambda x: int(x[0]) >= int(cur_pos) >= int(x[1])
+        shift_before_start = 1
+        shift_after_end = -1
+
+    tmp = filter(compare_f, bounds)
     if tmp != []:
         start, end = tmp[0]
+        #
+        # |---|||| <- missing
+        # ||||||||
+        #
         if start == cur_pos:
-            return 1
+            return shift_before_start
+        #
+        # |||||---| <- missing
+        # |||||||||
+        #
         elif end == cur_pos:
-            return -1
+            return shift_after_end
         else:
             return 0
     return 1
 
 
-def find_missing_exon():
+def find_missing_exon(file_path):
+    complete_lines = []
+    org_lines = []
     ref_bound = []
     var_bound = []
-    comm_bound = []
+    comm_bound = set()
     is_ref = True
     chk = False
-    var_id = None
-    for line in read_file('test/NM_004643.3.as'):
-        if line.startswith("VAR"):
+    # var_id = None
+    direction = None
+    for line in read_file(file_path):
+        if line.startswith('REF'):
+            complete_lines.append(line)
+        if line.startswith('VAR'):
+            complete_lines.append(line)
+            org_lines = []
             var_bound = []
-            comm_bound = []
-            var_id = line.split()[1]
+            comm_bound.clear()
+            # var_id = line.split()[1]
             # print var_id
             is_ref = False
             chk = True
+            for i in range(0, len(ref_bound)):
+                tmp = int(ref_bound[i][0]) - int(ref_bound[i][1])
+                if tmp != 0:
+                    direction = 'asc' if tmp < 0 else 'des'
+                    break
         elif line.startswith('EXON'):
             _, __ = line.split()[4:6]
             if is_ref:
@@ -126,27 +155,53 @@ def find_missing_exon():
             else:
                 var_bound.append((_, __))
         elif line.startswith('COMM'):
+            org_lines.append(line)
             _, __ = line.split()[2:4]
-            comm_bound.append((_, __))
+            comm_bound.add((_, __))
         elif line.startswith('//') and chk:
-            c = []
-            all_bound = sorted(set(chain(*ref_bound)) | set(chain(*var_bound)), reverse=True)
+            c = set()
+            all_bound = sorted(set(chain(*ref_bound)) | set(chain(*var_bound)), reverse=True if direction == 'dec' else False)
             start = None
             for bound in all_bound:
-                shift_1 = chk_stat_in_exon(bound, ref_bound)
-                shift_2 = chk_stat_in_exon(bound, var_bound)
+                shift_1 = chk_stat_in_exon(bound, ref_bound, direction)
+                shift_2 = chk_stat_in_exon(bound, var_bound, direction)
+                shift = shift_1 + shift_2
                 if shift_1 == 0 or shift_2 == 0:
-                    c.append((start, bound))
-                    start = int(bound) + shift_1 + shift_2
+                    # shift_1 + shift_2 = 1 or -1 only
+                    if (direction == 'asc' and shift > 0) or (direction == 'des' and shift < 0):
+                        c.add((start, bound))
+                        start = str(int(bound) + shift)
+                    else:
+                        c.add((start, str(int(bound) + shift)))
+                        start = bound
                 else:
                     if start is not None:
-                        c.append((start, bound))
+                        c.add((start, bound))
                         start = None
                     else:
                         start = bound
             if len(c) != len(comm_bound):
-                print ">>", var_id
+                # print ">>", var_id
+                # print c - comm_bound
+                # pprint.pprint(comm_bound)
+                for missing_region in c - comm_bound:
+                    if direction == 'asc':
+                        in_ref = filter(lambda x: x[0] <= missing_region[0] and missing_region[1] <= x[1], ref_bound) != []
+                        in_var = filter(lambda x: x[0] <= missing_region[0] and missing_region[1] <= x[1], var_bound) != []
+                    else:
+                        in_ref = filter(lambda x: x[0] >= missing_region[0] and missing_region[1] >= x[1], ref_bound) != []
+                        in_var = filter(lambda x: x[0] >= missing_region[0] and missing_region[1] >= x[1], var_bound) != []
+                    fmt = "COMM  xx   {:s}   {:s}  {:>5d}  {:>5d}   {:>5d}  {:>5d}  {:>2d}  {:>2d}"
+                    p_ref = 999 if in_ref else 0
+                    p_var = 999 if in_var else 0
+                    add_up = fmt.format(missing_region[0], missing_region[1], p_ref, p_ref, p_var, p_var, 01 if p_ref else -1, 1 if p_var else -1)
+                    org_lines.append(add_up)
+                complete_lines.extend(sorted(org_lines, key=lambda x: x.split()[2], reverse=True if direction == 'dec' else False))
+            else:
+                complete_lines.extend(org_lines)
+            complete_lines.append('//')
+    return '\n'.join(complete_lines)
 
 if __name__ == '__main__':
     # adjust_boundary()
-    find_missing_exon()
+    print find_missing_exon('test/NM_004643.3.as')
