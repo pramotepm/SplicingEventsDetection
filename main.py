@@ -30,7 +30,7 @@ def update(bit_arr, ASTI, stat):
 def chk_asti(sub1, sub2):
     a = ''.join(sub1)
     b = ''.join(sub2)
-    con1 = len(a) >  2 and len(b) > 2
+    con1 = len(a) > 2 and len(b) > 2
     con2 = a.count('1') > 1 and b.count('1') > 1
     if con1 and con2:
         a, b = (b, a) if b < a else (a, b)
@@ -80,42 +80,46 @@ def generate_bit_array(V):
     return assess_terminal(bit_arr_ref), assess_terminal(bit_arr_var)
 
 
-def main():
-    input_dir = "./test"
-    output_dir = "./stat"
+def extract_event(input_file_path, output_file_path):
+    print input_file_path
+    V = {}
+    ref_id = None
+    trans_id = None
     stat = Stat()
+    for line in util.find_missing_exon(input_file_path):
+        if line.startswith('VAR'):
+            trans_id = line.split()[1]
+            V[trans_id] = []
+        elif line.startswith('REF'):
+            ref_id = line.split()[1].split('.')[0]
+        elif line.startswith('COMM'):
+            _ = line.split()
+            _ = map(lambda x: int(x), (_[2:8]))
+            V[trans_id].append(_)
+
+    with open(output_file_path + '.stat', 'w') as f_out:
+        for trans_id in V:
+            f_out.write("%s <-> %s\n" % (ref_id, trans_id.split('.')[0]))
+            bt_r, bt_v = generate_bit_array(V[trans_id])
+            for bit_pattern, n_bit_pattern in extract_asti(bt_r, bt_v).items():
+                stat.add(bit_pattern, n_bit_pattern)
+                dec_pattern = util.reformat_to_dec(bit_pattern)
+                f_out.write("%s %s %d\n" % (bit_pattern, dec_pattern, n_bit_pattern))
+            f_out.write("//\n")
+            # break
+    return stat
+
+
+def main(input_dir, output_dir):
+    stat = None
+    if not exists(output_dir):
+        makedirs(output_dir)
     for f_path in util.read_dir(input_dir):
-        print f_path
-        V = {}
-        ref_id = None
-        trans_id = None
-        # for line in util.read_file(join(input_dir, f_path)):
-        for line in util.find_missing_exon(join(input_dir, f_path)):
-            if line.startswith('VAR'):
-                trans_id = line.split()[1]
-                V[trans_id] = []
-            elif line.startswith('REF'):
-                ref_id = line.split()[1].split('.')[0]
-            elif line.startswith('COMM'):
-                _ = line.split()
-                _ = map(lambda x : int(x), (_[2:8]))
-                V[trans_id].append(_)
-
-        if not exists(output_dir):
-            makedirs(output_dir)
-
-        with open(join(output_dir, f_path) + '.stat', 'w') as f_out:
-            for trans_id in V:
-                f_out.write("%s <-> %s\n" % (ref_id, trans_id.split('.')[0]))
-                bt_r, bt_v = generate_bit_array(V[trans_id])
-                for bit_pattern, n_bit_pattern in extract_asti(bt_r, bt_v).items():
-                    stat.add(bit_pattern, n_bit_pattern)
-                    dec_pattern = util.reformat_to_dec(bit_pattern)
-                    f_out.write("%s %s %d\n" % (bit_pattern, dec_pattern, n_bit_pattern))
-                f_out.write("//\n")
-                # break
+        stat = extract_event(join(input_dir, f_path), join(output_dir, f_path))
     with open('stat_report.log', 'w') as f_out:
         f_out.write(stat.report())
 
 if __name__ == '__main__':
-    main()
+    input_dir = "/Users/pramotepm/Desktop/mRNA/analyze/splicing_event/ascds/"
+    output_dir = "/Users/pramotepm/Desktop/mRNA/analyze/splicing_event/stat"
+    main(input_dir, output_dir)
