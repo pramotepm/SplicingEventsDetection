@@ -89,7 +89,8 @@ def main():
         V = {}
         ref_id = None
         trans_id = None
-        for line in util.read_file(join(input_dir, f_path)):
+        # for line in util.read_file(join(input_dir, f_path)):
+        for line in util.find_missing_exon(join(input_dir, f_path)):
             if line.startswith('VAR'):
                 trans_id = line.split()[1]
                 V[trans_id] = []
