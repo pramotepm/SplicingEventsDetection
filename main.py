@@ -80,12 +80,11 @@ def generate_bit_array(V):
     return assess_terminal(bit_arr_ref), assess_terminal(bit_arr_var)
 
 
-def extract_event(input_file_path, output_file_path):
+def extract_event(stat, input_file_path, output_file_path):
     print input_file_path
     V = {}
     ref_id = None
     trans_id = None
-    stat = Stat()
     for line in util.find_missing_exon(input_file_path):
         if line.startswith('VAR'):
             trans_id = line.split()[1]
@@ -111,13 +110,25 @@ def extract_event(input_file_path, output_file_path):
 
 
 def main(input_dir, output_dir):
-    stat = None
+    stat = Stat()
+
     if not exists(output_dir):
         makedirs(output_dir)
+    result_dir = join(output_dir, 'out')
+    if not exists(result_dir):
+        makedirs(result_dir)
+
+    # test = 1010
     for f_path in util.read_dir(input_dir):
-        stat = extract_event(join(input_dir, f_path), join(output_dir, f_path))
-    with open('stat_report.log', 'w') as f_out:
+        stat = extract_event(stat, join(input_dir, f_path), join(output_dir, f_path))
+        # if test == 0:
+        #     break
+        # test -= 1
+
+    with open(join(result_dir, 'stat_report.log'), 'w') as f_out:
         f_out.write(stat.report())
+    with open(join(result_dir, 'raw_data.txt'), 'w') as f_out:
+        f_out.write(stat.report_raw_data())
 
 if __name__ == '__main__':
     input_dir = "/Users/pramotepm/Desktop/mRNA/analyze/splicing_event/ascds/"
