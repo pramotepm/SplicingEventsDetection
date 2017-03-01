@@ -3,6 +3,7 @@ from report import Stat
 from os import makedirs
 from os.path import isfile, join, exists
 import util
+import sys
 
 
 def pairwise(iterable):
@@ -147,9 +148,12 @@ def main(input_dir, output_dir):
         f_out.write(stat.report_raw_data())
 
 if __name__ == '__main__':
-    input_dir = './test'
-    output_dir = './stat'
+    if len(sys.argv[1:]) != 2:
+        sys.stderr.write("usage: main.py <`ascds` Input Directory> <Output Directory>\n")
+    else:
+        main(*sys.argv[1:])
 
-    # input_dir = "/Users/pramotepm/Desktop/mRNA/analyze/splicing_event/ascds/"
-    # output_dir = "/Users/pramotepm/Desktop/mRNA/analyze/splicing_event/stat"
-    main(input_dir, output_dir)
+    # input_dir = './test'
+    # output_dir = './stat'
+
+    # main(input_dir, output_dir)
