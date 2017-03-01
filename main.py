@@ -80,32 +80,33 @@ def generate_bit_array(V):
     return assess_terminal(bit_arr_ref), assess_terminal(bit_arr_var)
 
 
-def extract_event(stat, input_file_path, output_file_path):
+def extract_event(stat, input_file_path, csv_file_path, stat_file_path):
     print input_file_path
-    V = {}
+    variant_comm_lines = {}
     ref_id = None
     trans_id = None
     for line in util.find_missing_exon(input_file_path):
         if line.startswith('VAR'):
             trans_id = line.split()[1]
-            V[trans_id] = []
+            variant_comm_lines[trans_id] = []
         elif line.startswith('REF'):
             ref_id = line.split()[1].split('.')[0]
         elif line.startswith('COMM'):
             _ = line.split()
             _ = map(lambda x: int(x), (_[2:8]))
-            V[trans_id].append(_)
+            variant_comm_lines[trans_id].append(_)
 
-    with open(output_file_path + '.stat', 'w') as f_out:
-        for trans_id in V:
-            f_out.write("%s <-> %s\n" % (ref_id, trans_id.split('.')[0]))
-            bt_r, bt_v = generate_bit_array(V[trans_id])
+    with open(csv_file_path, 'a') as f_csv_out, open(stat_file_path + '.stat', 'w') as f_stat_out:
+        for trans_id in variant_comm_lines:
+            var_id = trans_id.split('.')[0]
+            f_stat_out.write("%s <-> %s\n" % (ref_id, var_id))
+            bt_r, bt_v = generate_bit_array(variant_comm_lines[trans_id])
             for bit_pattern, n_bit_pattern in extract_asti(bt_r, bt_v).items():
                 stat.add(bit_pattern, n_bit_pattern)
                 dec_pattern = util.reformat_to_dec(bit_pattern)
-                f_out.write("%s %s %d\n" % (bit_pattern, dec_pattern, n_bit_pattern))
-            f_out.write("//\n")
-            # break
+                f_csv_out.write("%s,%s,\"%s\",\"%s\",%d\n" % (ref_id, var_id, bit_pattern, dec_pattern, n_bit_pattern))
+                f_stat_out.write("%s %s %d\n" % (bit_pattern, dec_pattern, n_bit_pattern))
+            f_stat_out.write("//\n")
     return stat
 
 
@@ -114,13 +115,28 @@ def main(input_dir, output_dir):
 
     if not exists(output_dir):
         makedirs(output_dir)
+
     result_dir = join(output_dir, 'out')
     if not exists(result_dir):
         makedirs(result_dir)
 
+    stats_dir = join(output_dir, 'stats')
+    if not exists(stats_dir):
+        makedirs(stats_dir)
+
+    # Create header/column name for an output file
+    splicing_event_out_filename = 'splicing_events.csv'
+    f_csv_out = join(output_dir, splicing_event_out_filename)
+    f_out = open(f_csv_out, 'w')
+    f_out.write('ref_id,var_id,binary,decimal,no_pattern\n')
+    f_out.close()
+
     # test = 1010
     for f_path in util.read_dir(input_dir):
-        stat = extract_event(stat, join(input_dir, f_path), join(output_dir, f_path))
+        f_path_in = join(input_dir, f_path)
+        f_stat_out = join(stats_dir, f_path)
+
+        stat = extract_event(stat, f_path_in, f_csv_out, f_stat_out)
         # if test == 0:
         #     break
         # test -= 1
@@ -131,6 +147,9 @@ def main(input_dir, output_dir):
         f_out.write(stat.report_raw_data())
 
 if __name__ == '__main__':
-    input_dir = "/Users/pramotepm/Desktop/mRNA/analyze/splicing_event/ascds/"
-    output_dir = "/Users/pramotepm/Desktop/mRNA/analyze/splicing_event/stat"
+    input_dir = './test'
+    output_dir = './stat'
+
+    # input_dir = "/Users/pramotepm/Desktop/mRNA/analyze/splicing_event/ascds/"
+    # output_dir = "/Users/pramotepm/Desktop/mRNA/analyze/splicing_event/stat"
     main(input_dir, output_dir)
